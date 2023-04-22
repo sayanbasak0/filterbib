@@ -31,10 +31,22 @@ def getcites(texfile, verbose=False):
 
 def filtercites(bibfiles, cites, verbose=False):
     bibs = {}
+    repstrs = {}
     for bibfile in bibfiles:
         bibs[bibfile] = {}
         with open(bibfile+'.bib', 'r', encoding='utf8') as f:
             text = f.read()
+            stringreplacements = re.findall('(@[Ss][Tt][Rr][Ii][Nn][Gg].*)\n',text)
+            repstrs[bibfile] = []
+            for strrep in stringreplacements:
+                strrep = '@string'+strrep[len('@string'):]
+                idx = strrep.find('%')
+                if idx>=0 and idx<len(strrep):
+                    strrep = strrep[:idx].strip()
+                idx = strrep.find('(')
+                if idx>=0 and idx<len(strrep):
+                    strrep = strrep[:idx] + '{' + strrep[idx+1:-1] + '}'
+                repstrs[bibfile].append(strrep)
             bibcites = re.findall('@[a-zA-Z]+?\s*?\{\s*?.+?\s*?,\s*?\n',text)
             newtext = text
             for bib in bibcites:
@@ -65,7 +77,7 @@ def filtercites(bibfiles, cites, verbose=False):
         if verbose:
             for cite in list(bibs[bibfile].keys()):
                 print(' ',len(bibfile+'.bib citation found:'),cite)
-    return bibs
+    return bibs,repstrs
 
 import sys
 import os
@@ -73,7 +85,7 @@ if __name__=='__main__':
     texfiles = []
     bibfiles = []
     merge_bib = ''
-    
+    print (sys.argv)
     i = 0
     while i<len(sys.argv):
         arg = sys.argv[i]
@@ -89,11 +101,11 @@ if __name__=='__main__':
                 print('Cannot find tex file:',arg)
         elif arg in ['-m','--merge-tex']:
             i+=1
-            if i+1<len(sys.argv):
-                if sys.argv[i+1].endswith('.bib'):
-                    merge_bib = sys.argv[i+1]
+            if i<len(sys.argv):
+                if sys.argv[i].endswith('.bib'):
+                    merge_bib = sys.argv[i]
                 else:
-                    merge_bib = sys.argv[i+1]+'.bib'
+                    merge_bib = sys.argv[i]+'.bib'
             else:
                 merge_bib = 'texmerged_filter.bib'
             if os.path.isfile(merge_bib):
@@ -113,7 +125,7 @@ if __name__=='__main__':
                 allcites = list(set(allcites+cites))
             print('[ Merged tex ] Citations:', len(allcites))
             print('-------------------')
-            bibs = filtercites(bibfiles, allcites)
+            bibs,repstrs = filtercites(bibfiles, allcites)
             print('[ Merged tex ] Output: '+merge_bib)
             with open(merge_bib, 'w', encoding='utf8') as f:
                 maxlen = max([len('%%%%%%%% '+texfile+'.tex %%%%%%%%') for texfile in texfiles])
@@ -123,6 +135,7 @@ if __name__=='__main__':
                 f.write(('%'*maxlen)+'\n')
                 for bibkey,bibvalue in bibs.items():
                     f.write('\n\n%%%%%%%% '+bibkey+'.bib %%%%%%%%\n\n')
+                    f.write(('\n'.join(list(set(repstrs[bibkey]))))+'\n\n')
                     f.write('\n\n'.join(list(bibvalue.values())))
                     f.write('\n\n%%%%%%%% '+bibkey+'.bib %%%%%%%%\n\n')
             print('===================\n')
@@ -131,7 +144,7 @@ if __name__=='__main__':
                 print('\n===================')
                 cites = getcites(texfile)
                 print('-------------------')
-                bibs = filtercites(bibfiles, cites)
+                bibs,repstrs = filtercites(bibfiles, cites)
                 print('[ '+texfile+'.tex ] Output: '+texfile+'_filter.bib')
                 with open(texfile+'_filter.bib', 'w', encoding='utf8') as f:
                     f.write(('%'*len('%%%%%%%% '+texfile+'.tex %%%%%%%%'))+'\n')
@@ -139,6 +152,7 @@ if __name__=='__main__':
                     f.write(('%'*len('%%%%%%%% '+texfile+'.tex %%%%%%%%'))+'\n')
                     for bibkey,bibvalue in bibs.items():
                         f.write('\n\n%%%%%%%% '+bibkey+'.bib %%%%%%%%\n\n')
+                        f.write(('\n'.join(list(set(repstrs[bibkey]))))+'\n\n')
                         f.write('\n\n'.join(list(bibvalue.values())))
                         f.write('\n\n%%%%%%%% '+bibkey+'.bib %%%%%%%%\n\n')
                 print('===================\n')
